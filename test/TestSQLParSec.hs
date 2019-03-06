@@ -11,6 +11,7 @@ import Test.HUnit
 tests =
   [ testGroup_parseSQLCommand_select
   , testGroup_parseSQLCommand_update
+  , testGroup_parseSQLCommand_delete
   , testGroup_parseClause
   , testGroup_parseClauses
   , testGroup_parseWord
@@ -43,6 +44,20 @@ testGroup_parseSQLCommand_update =
     , testCase
         "Should parse UPDATE command with multiple clauses correctly"
         test_parseSQLCommand_update
+    ]
+
+testGroup_parseSQLCommand_delete =
+  testGroup
+    "parseSQLCommand DELETE"
+    [ testCase
+        "Should parse DELETE command correclty"
+        test_parseSQLCommand_delete_upper
+    , testCase
+        "Should parse delete command correctly"
+        test_parseSQLCommand_delete_lower
+    , testCase
+        "Should parse DELETE command with where clause correctly"
+        test_parseSQLCommand_delete
     ]
 
 testGroup_parseClause =
@@ -151,9 +166,30 @@ test_parseSQLCommand_update_lower =
 test_parseSQLCommand_update :: Assertion
 test_parseSQLCommand_update =
   assertParse
-  (SQLCommand UPDATE "person" ["age=27"] [(WHERE, ["name='Zoltan'"])])
-  parseSQLCommand
-  "UPDATE person SET age=27 WHERE name='Zoltan';"
+    (SQLCommand UPDATE "person" ["age=27"] [(WHERE, ["name='Zoltan'"])])
+    parseSQLCommand
+    "UPDATE person SET age=27 WHERE name='Zoltan';"
+
+test_parseSQLCommand_delete_upper :: Assertion
+test_parseSQLCommand_delete_upper =
+  assertParse
+    (SQLCommand DELETE "person" [] [])
+    parseSQLCommand
+    "DELETE FROM person;"
+
+test_parseSQLCommand_delete_lower :: Assertion
+test_parseSQLCommand_delete_lower =
+  assertParse
+    (SQLCommand DELETE "person" [] [])
+    parseSQLCommand
+    "DELETE FROM person;"
+
+test_parseSQLCommand_delete :: Assertion
+test_parseSQLCommand_delete =
+  assertParse
+    (SQLCommand DELETE "person" [] [(WHERE, ["name='Zoltan'"])])
+    parseSQLCommand
+    "DELETE FROM person WHERE name='Zoltan';"
 
 test_parseClause_single :: Assertion
 test_parseClause_single =

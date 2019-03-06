@@ -57,6 +57,11 @@ parseByType UPDATE = do
   (columns, last) <- parseCommaSeparatedFields $ endWithSpaceOrSemicolon
   clauses <- parseClauses last
   return $ SQLCommand UPDATE table columns clauses
+parseByType DELETE = do
+  string "from " <|> string "FROM "
+  (table, last) <- parseWord $ endWithSpaceOrSemicolon
+  clauses <- parseClauses last
+  return $ SQLCommand DELETE table [] clauses
 parseByType _ = pfail
 
 parseClause :: ReadP a -> ReadP (SQLClauseType, [String], a)
