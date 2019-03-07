@@ -62,7 +62,13 @@ parseByType DELETE = do
   (table, last) <- parseWord $ endWithSpaceOrSemicolon
   clauses <- parseClauses last
   return $ SQLCommand DELETE table [] clauses
-parseByType _ = pfail
+parseByType INSERT = do
+  string "into " <|> string "INTO "
+  (table, _) <- parseWord $ string " ("
+  (cs, _) <- parseCommaSeparatedFields $ string ") "
+  string "values (" <|> string "VALUES ("
+  (vs, _) <- parseCommaSeparatedFields $ string ");"
+  return $ SQLCommand INSERT table (zipWith (\a b -> a ++ "=" ++ b) cs vs) []
 
 parseClause :: ReadP a -> ReadP (SQLClauseType, [String], a)
 parseClause trail = do

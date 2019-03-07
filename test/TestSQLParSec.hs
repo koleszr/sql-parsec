@@ -12,6 +12,7 @@ tests =
   [ testGroup_parseSQLCommand_select
   , testGroup_parseSQLCommand_update
   , testGroup_parseSQLCommand_delete
+  , testGroup_parseSQLCommand_insert
   , testGroup_parseClause
   , testGroup_parseClauses
   , testGroup_parseWord
@@ -48,7 +49,7 @@ testGroup_parseSQLCommand_update =
 
 testGroup_parseSQLCommand_delete =
   testGroup
-    "parseSQLCommand DELETE"
+    "parseSQLCommand DELETE FROM"
     [ testCase
         "Should parse DELETE command correclty"
         test_parseSQLCommand_delete_upper
@@ -58,6 +59,17 @@ testGroup_parseSQLCommand_delete =
     , testCase
         "Should parse DELETE command with where clause correctly"
         test_parseSQLCommand_delete
+    ]
+
+testGroup_parseSQLCommand_insert =
+  testGroup
+    "parseSqlcommand INSERT INTO"
+    [ testCase
+        "Should parse INSERT command correclty"
+        test_parseSQLCommand_insert_upper
+    , testCase
+        "Should parse insert command correctly"
+        test_parseSQLCommand_insert_lower
     ]
 
 testGroup_parseClause =
@@ -190,6 +202,20 @@ test_parseSQLCommand_delete =
     (SQLCommand DELETE "person" [] [(WHERE, ["name='Zoltan'"])])
     parseSQLCommand
     "DELETE FROM person WHERE name='Zoltan';"
+
+test_parseSQLCommand_insert_upper :: Assertion
+test_parseSQLCommand_insert_upper =
+  assertParse
+  (SQLCommand INSERT "person" ["name='Zoltan'", "age=27"] [])
+  parseSQLCommand
+  "INSERT INTO person (name, age) VALUES ('Zoltan', 27);"
+
+test_parseSQLCommand_insert_lower :: Assertion
+test_parseSQLCommand_insert_lower =
+  assertParse
+  (SQLCommand INSERT "person" ["name='Zoltan'", "age=27"] [])
+  parseSQLCommand
+  "insert into person (name, age) values ('Zoltan', 27);"
 
 test_parseClause_single :: Assertion
 test_parseClause_single =
