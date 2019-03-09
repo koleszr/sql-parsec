@@ -115,31 +115,31 @@ parseSQLClauseType =
 sqlClauseTypes = ["where", "having", "order by", "group by"]
 
 parseSQLCommand :: ReadP SQLCommand
-parseSQLCommand = fmap (read . fst) (parseWord $ endWithSpace) >>= parseByType
+parseSQLCommand = fmap (read . fst) (parseWord endWithSpace) >>= parseByType
 
 parseByType :: SQLCommandType -> ReadP SQLCommand
 parseByType SELECT = do
   (columns, _) <- parseCommaSeparatedFields $ satisfy isSpace
   string "from " <|> string "FROM "
-  (table, last) <- parseWord $ endWithSpaceOrSemicolon
+  (table, last) <- parseWord endWithSpaceOrSemicolon
   clauses <- parseClauses last
   return $ SQLCommand SELECT table (column <$> columns) clauses
 parseByType UPDATE = do
-  (table, _) <- parseWord $ endWithSpace
+  (table, _) <- parseWord endWithSpace
   string "set " <|> string "SET "
-  (columns, last) <- parseCommaSeparatedFields $ endWithSpaceOrSemicolon
+  (columns, last) <- parseCommaSeparatedFields endWithSpaceOrSemicolon
   clauses <- parseClauses last
   return $ SQLCommand UPDATE table (column <$> columns) clauses
 parseByType DELETE = do
   string "from " <|> string "FROM "
-  (table, last) <- parseWord $ endWithSpaceOrSemicolon
+  (table, last) <- parseWord endWithSpaceOrSemicolon
   clauses <- parseClauses last
   return $ SQLCommand DELETE table [] clauses
 parseByType INSERT = do
   string "into " <|> string "INTO "
   (table, _) <- parseWord $ string " ("
-  (cs, _) <- parseCommaSeparatedFields $ string ") "
-  string "values (" <|> string "VALUES ("
+  (cs, _) <-
+    parseCommaSeparatedFields (string ") values (" <|> string ") VALUES (")
   (vs, _) <- parseCommaSeparatedFields $ string ");"
   return $ SQLCommand INSERT table (zipWith columnWithValue cs vs) []
 
@@ -149,14 +149,14 @@ parseClause trail =
   (\m -> satisfy (== ' ') >> (sequence $ (p trail) <$> m))
   where
     p trail =
-      (\t -> (\(fs, v) -> (t, fs, v)) <$> (parseCommaSeparatedFields $ trail))
+      (\t -> (\(fs, v) -> (t, fs, v)) <$> (parseCommaSeparatedFields trail))
 
 parseClauses :: Char -> ReadP [(SQLClauseType, [String])]
 parseClauses ' ' = do
-  initClauses <- catMaybes <$> (many (parseClause $ endWithSpace))
+  initClauses <- catMaybes <$> (many (parseClause endWithSpace))
   last <-
     (\m -> (\(ct, cs, _) -> (ct, cs)) <$> maybeToList m) <$>
-    (parseClause $ endWithSemicolon)
+    (parseClause endWithSemicolon)
   return $ (fmap (\(t, cs, _) -> (t, cs)) initClauses) ++ last
 parseClauses _ = return []
 
