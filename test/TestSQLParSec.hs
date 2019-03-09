@@ -17,6 +17,7 @@ tests =
   , testGroup_parseClauses
   , testGroup_parseWord
   , testGroup_parseCommaSeparatedFields
+  , testGroup_show
   ]
 
 testGroup_parseSQLCommand_select =
@@ -114,6 +115,17 @@ testGroup_parseCommaSeparatedFields =
         "Should parse comma separate fields correctly with trailing semicolon"
         test_parseCommaSeparatedFields_semicolon
     ]
+
+testGroup_show =
+  testGroup
+  "show"
+  [ testCase "Should show SELECT correctly" test_show_select
+  , testCase "Should show SELECT without clauses correcty" test_show_select_without_clause
+  , testCase "Should show INSERT correctly" test_show_insert
+  , testCase "Should show DELETE correctly" test_show_delete
+  , testCase "Should show UPDATE correctly" test_show_update
+  , testCase "Should show UPDATE without clauses correctly" test_show_update_without_clause
+  ]
 
 test_parseCommaSeparatedFields_single :: Assertion
 test_parseCommaSeparatedFields_single =
@@ -254,3 +266,57 @@ assertParse expected parser str =
   case readP_to_S parser str of
     [(actual, _)] -> expected @=? actual
     otherwise -> assertFailure $ "Failure: " ++ show otherwise
+
+test_show_select :: Assertion
+test_show_select =
+  assertShow
+    "SELECT name, age, COUNT(id) FROM person WHERE age>27 GROUP BY employer HAVING COUNT(id) ORDER BY COUNT(id);"
+    (SQLCommand
+       SELECT
+       "person"
+       [column "name", column "age", column "COUNT(id)"]
+       [ (WHERE, ["age>27"])
+       , (GROUPBY, ["employer"])
+       , (HAVING, ["COUNT(id)"])
+       , (ORDERBY, ["COUNT(id)"])
+       ])
+
+test_show_select_without_clause :: Assertion
+test_show_select_without_clause =
+  assertShow
+    "SELECT name, age FROM person;"
+    (SQLCommand SELECT "person" [column "name", column "age"] [])
+
+test_show_insert :: Assertion
+test_show_insert =
+  assertShow
+    "INSERT INTO person (name, age, employer) VALUES ('Zoltan', 27, 'E Corp');"
+    (SQLCommand
+       INSERT
+       "person"
+       [ columnWithValue "name" "'Zoltan'"
+       , columnWithValue "age" "27"
+       , columnWithValue "employer" "'E Corp'"
+       ]
+       [])
+
+test_show_delete :: Assertion
+test_show_delete =
+  assertShow
+    "DELETE FROM person WHERE age>27;"
+    (SQLCommand DELETE "person" [] [(WHERE, ["age>27"])])
+
+test_show_update :: Assertion
+test_show_update =
+  assertShow
+    "UPDATE person SET age=27 WHERE age=26;"
+    (SQLCommand UPDATE "person" [column "age=27"] [(WHERE, ["age=26"])])
+
+test_show_update_without_clause :: Assertion
+test_show_update_without_clause =
+  assertShow
+  "UPDATE person SET age=30;"
+  (SQLCommand UPDATE "person" [column "age=30"] [])
+
+assertShow :: String -> SQLCommand -> Assertion
+assertShow expected cmd = expected @=? show cmd

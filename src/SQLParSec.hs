@@ -1,6 +1,7 @@
 module SQLParSec where
 
 import Data.Char (isSpace, toUpper)
+import Data.List (intercalate)
 import Data.Maybe (fromMaybe, maybeToList, catMaybes)
 import Control.Applicative (empty, (<|>))
 import Text.ParserCombinators.ReadP
@@ -11,7 +12,43 @@ data SQLCommand = SQLCommand
   , table :: String
   , columns :: [SQLColumn]
   , clauses :: [(SQLClauseType, [String])]
-  } deriving (Eq, Show)
+  } deriving (Eq)
+
+instance Show SQLCommand where
+  showsPrec _ (SQLCommand SELECT table columns clauses) =
+    showString "SELECT " .
+    (showString $ intercalate ", " (showColumnName <$> columns)) .
+    showString " FROM " .
+    showString table .
+    if null clauses
+      then showChar ';'
+      else (showChar ' ' .
+            (showString $ intercalate " " (showClause <$> clauses)) .
+            showChar ';')
+  showsPrec _ (SQLCommand INSERT table columnsWithValue _) =
+    showString "INSERT INTO " .
+    showString table .
+    showString " (" .
+    (showString $ intercalate ", " (showColumnName <$> columnsWithValue)) .
+    showString ") VALUES (" .
+    (showString $
+     intercalate ", " ((fromMaybe "") . showColumnValue <$> columnsWithValue)) .
+    showString ");"
+  showsPrec _ (SQLCommand DELETE table [] clauses) =
+    showString "DELETE FROM " .
+    showString table .
+    showChar ' ' .
+    (showString $ intercalate " " (showClause <$> clauses)) . showChar ';'
+  showsPrec _ (SQLCommand UPDATE table columns clauses) =
+    showString "UPDATE " .
+    showString table .
+    showString " SET " .
+    (showString $ intercalate ", " (showColumnName <$> columns)) .
+    if null clauses
+      then showChar ';'
+      else (showChar ' ' .
+            (showString $ intercalate " " (showClause <$> clauses)) .
+            showChar ';')
 
 data SQLCommandType = SELECT
                     | INSERT
@@ -143,3 +180,6 @@ endWithSemicolon = satisfy (== ';')
 
 endWithSpaceOrSemicolon :: ReadP Char
 endWithSpaceOrSemicolon = endWithSpace <|> endWithSemicolon
+
+showClause :: (SQLClauseType, [String]) -> String
+showClause (typ, vs) = show typ ++ " " ++ intercalate ", " vs
