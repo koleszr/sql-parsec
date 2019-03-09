@@ -1,23 +1,19 @@
-module TestSQLParSec
-  ( tests
-  ) where
+module TestSQLCommand (tests) where
 
-import SQLParSec
-import Text.ParserCombinators.ReadP
-import Text.Read (readMaybe)
+import SQLClause
+import SQLColumn
+import SQLCommand
 import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit
+import TestUtils
+import Text.Read (readMaybe)
 
 tests =
   [ testGroup_parseSQLCommand_select
   , testGroup_parseSQLCommand_update
   , testGroup_parseSQLCommand_delete
   , testGroup_parseSQLCommand_insert
-  , testGroup_parseClause
-  , testGroup_parseClauses
-  , testGroup_parseWord
-  , testGroup_parseCommaSeparatedFields
   , testGroup_show
   , testGroup_read_SQLCommandType
   ]
@@ -75,49 +71,6 @@ testGroup_parseSQLCommand_insert =
         test_parseSQLCommand_insert_lower
     ]
 
-testGroup_parseClause =
-  testGroup
-    "parseClause"
-    [ testCase "Should parse WHERE clause correctly" test_parseClause_single
-    , testCase
-        "Should parse WHERE clause with multiple conditions correctly"
-        test_parseClause_multiple
-    ]
-
-testGroup_parseClauses =
-  testGroup
-    "parseClauses"
-    [ testCase
-        "Should parse a single SQL clause correctly"
-        test_parseClauses_single
-    , testCase
-        "Should parse multiple SQL clauses correcty"
-        test_parseClauses_multiple
-    , testCase
-        "Should return an empty list if the input argument is not a space"
-        test_parseClauses_noSpace
-    ]
-
-testGroup_parseWord =
-  testGroup
-    "parseWord"
-    [ testCase "Should parse a word correctly with eof" test_parseWord_eof
-    , testCase
-        "Should parse a word correctly with trailing semicolon"
-        test_parseWord_semicolon
-    ]
-
-testGroup_parseCommaSeparatedFields =
-  testGroup
-    "parseCommaSeparatedFields"
-    [ testCase
-        "Should parse comma separated fields correctly with single field"
-        test_parseCommaSeparatedFields_single
-    , testCase
-        "Should parse comma separate fields correctly with trailing semicolon"
-        test_parseCommaSeparatedFields_semicolon
-    ]
-
 testGroup_show =
   testGroup
     "show"
@@ -149,25 +102,7 @@ testGroup_read_SQLCommandType =
         "Should read \"INSERT\" or \"insert\" as INSERT"
         test_read_SQLCommandType_insert
     , testCase "Should fail on invalid input" test_read_SQLCommandType_invalid
-    ]
-
-test_parseCommaSeparatedFields_single :: Assertion
-test_parseCommaSeparatedFields_single =
-  assertParse (["*"], ()) (parseCommaSeparatedFields $ eof) "*"
-
-test_parseCommaSeparatedFields_semicolon :: Assertion
-test_parseCommaSeparatedFields_semicolon =
-  assertParse
-    (["age", "name"], ';')
-    (parseCommaSeparatedFields $ satisfy (== ';'))
-    "age, name;"
-
-test_parseWord_eof :: Assertion
-test_parseWord_eof = assertParse ("person", ()) (parseWord $ eof) "person"
-
-test_parseWord_semicolon :: Assertion
-test_parseWord_semicolon =
-  assertParse ("person", ';') (parseWord $ (satisfy (== ';'))) "person;"
+    ]    
 
 test_parseSQLCommand_select_upper :: Assertion
 test_parseSQLCommand_select_upper =
@@ -250,43 +185,6 @@ test_parseSQLCommand_insert_lower =
        [columnWithValue "name" "'Zoltan'", columnWithValue "age" "27"])
     parseSQLCommand
     "insert into person (name, age) values ('Zoltan', 27);"
-
-test_parseClause_single :: Assertion
-test_parseClause_single =
-  assertParse
-    (Just (WHERE, ["age>27"], ';'))
-    (parseClause $ satisfy (== ';'))
-    "WHERE age>27;"
-
-test_parseClause_multiple :: Assertion
-test_parseClause_multiple =
-  assertParse
-    (Just (WHERE, ["age>27", "name='Zoltan'"], ';'))
-    (parseClause $ satisfy (== ';'))
-    "WHERE age>27, name='Zoltan';"
-
-test_parseClauses_single :: Assertion
-test_parseClauses_single =
-  assertParse [(WHERE, ["age>27"])] (parseClauses ' ') "WHERE age>27;"
-
-test_parseClauses_multiple :: Assertion
-test_parseClauses_multiple =
-  assertParse
-    [ (WHERE, ["age>27", "name='Zoltan'"])
-    , (HAVING, ["COUNT(*)"])
-    , (ORDERBY, ["name", "age"])
-    ]
-    (parseClauses ' ')
-    "WHERE age>27, name='Zoltan' HAVING COUNT(*) ORDER BY name, age;"
-
-test_parseClauses_noSpace :: Assertion
-test_parseClauses_noSpace = assertParse [] (parseClauses ';') "WHERE age>27;"
-
-assertParse :: (Eq a, Show a) => a -> ReadP a -> String -> Assertion
-assertParse expected parser str =
-  case readP_to_S parser str of
-    [(actual, _)] -> expected @=? actual
-    otherwise -> assertFailure $ "Failure: " ++ show otherwise
 
 test_show_select :: Assertion
 test_show_select =

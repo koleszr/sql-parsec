@@ -1,11 +1,17 @@
-module SQLParSec where
+module SQLCommand
+  ( SQLCommand(..)
+  , SQLCommandType(..)
+  , parseSQLCommand
+  ) where
 
+import Control.Applicative ((<|>))
 import Data.Char (isSpace, toUpper)
 import Data.List (intercalate)
-import Data.Maybe (fromMaybe, maybeToList, catMaybes)
-import Control.Applicative (empty, (<|>))
+import Data.Maybe (fromMaybe)
+import SQLClause
+import SQLColumn
+import SQLParSecUtils
 import Text.ParserCombinators.ReadP
-import Text.Read (readMaybe)
 
 type Table = String
 type Columns = [SQLColumn]
@@ -66,56 +72,7 @@ instance Read SQLCommandType where
       "INSERT" -> [(INSERT, "")]
       "UPDATE" -> [(UPDATE, "")]
       "DELETE" -> [(DELETE, "")]
-      _ -> []
-
-data SQLColumn = Column String
-               | ColumnWithString String String
-               deriving (Eq)
-
-column :: String -> SQLColumn
-column = Column
-
-columnWithValue :: String -> String -> SQLColumn
-columnWithValue = ColumnWithString
-
-showColumnName :: SQLColumn -> String
-showColumnName (Column c) = c
-showColumnName (ColumnWithString c _) = c
-
-showColumnValue :: SQLColumn -> Maybe String
-showColumnValue (ColumnWithString _ v) = Just v
-showColumnValue _ = Nothing
-
-data SQLClauseType = WHERE
-                   | HAVING
-                   | GROUPBY
-                   | ORDERBY
-                   deriving (Eq)
-
-instance Read SQLClauseType where
-  readsPrec _ str =
-    case fmap toUpper str of
-      "WHERE" -> [(WHERE, "")]
-      "HAVING" -> [(HAVING, "")]
-      "GROUP BY" -> [(GROUPBY, "")]
-      "ORDER BY" -> [(ORDERBY, "")]
-      _ -> []
-
-instance Show SQLClauseType where
-  showsPrec _ WHERE = showString "WHERE"
-  showsPrec _ HAVING = showString "HAVING"
-  showsPrec _ GROUPBY = showString "GROUP BY"
-  showsPrec _ ORDERBY = showString "ORDER BY"
-
-parseSQLClauseType :: ReadP (Maybe SQLClauseType)
-parseSQLClauseType =
-  foldl
-    (\p t -> p <|> string t)
-    empty
-    (sqlClauseTypes ++ ((toUpper <$>) <$> sqlClauseTypes)) >>=
-  return . readMaybe
-
-sqlClauseTypes = ["where", "having", "order by", "group by"]
+      _ -> []           
 
 parseSQLCommand :: ReadP SQLCommand
 parseSQLCommand = fmap (read . fst) (parseWord endWithSpace) >>= parseByType
@@ -145,44 +102,3 @@ parseByType INSERT = do
     parseCommaSeparatedFields (string ") values (" <|> string ") VALUES (")
   (vs, _) <- parseCommaSeparatedFields $ string ");"
   return $ Insert table (zipWith columnWithValue cs vs)
-
-parseClause :: ReadP a -> ReadP (Maybe (SQLClauseType, [String], a))
-parseClause trail =
-  parseSQLClauseType >>=
-  (\m -> satisfy (== ' ') >> (sequence $ (p trail) <$> m))
-  where
-    p trail =
-      (\t -> (\(fs, v) -> (t, fs, v)) <$> (parseCommaSeparatedFields trail))
-
-parseClauses :: Char -> ReadP [(SQLClauseType, [String])]
-parseClauses ' ' = do
-  initClauses <- catMaybes <$> (many (parseClause endWithSpace))
-  last <-
-    (\m -> (\(ct, cs, _) -> (ct, cs)) <$> maybeToList m) <$>
-    (parseClause endWithSemicolon)
-  return $ (fmap (\(t, cs, _) -> (t, cs)) initClauses) ++ last
-parseClauses _ = return []
-
-parseWord :: ReadP a -> ReadP (String, a)
-parseWord trail = do
-  word <- many1 $ satisfy (\c -> not (isSpace c) && (not (elem c ".,:;")))
-  trailingChar <- trail
-  return (word, trailingChar)
-
-parseCommaSeparatedFields :: ReadP a -> ReadP ([String], a)
-parseCommaSeparatedFields trail = do
-  initWords <- option [] (many1 $ parseWord (string ", "))
-  (lastWord, last) <- parseWord trail
-  return $ ((fmap fst initWords) ++ [lastWord], last)
-
-endWithSpace :: ReadP Char
-endWithSpace = satisfy isSpace
-
-endWithSemicolon :: ReadP Char
-endWithSemicolon = satisfy (== ';')
-
-endWithSpaceOrSemicolon :: ReadP Char
-endWithSpaceOrSemicolon = endWithSpace <|> endWithSemicolon
-
-showClause :: (SQLClauseType, [String]) -> String
-showClause (typ, vs) = show typ ++ " " ++ intercalate ", " vs
