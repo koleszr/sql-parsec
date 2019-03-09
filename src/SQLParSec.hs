@@ -7,15 +7,18 @@ import Control.Applicative (empty, (<|>))
 import Text.ParserCombinators.ReadP
 import Text.Read (readMaybe)
 
-data SQLCommand = SQLCommand
-  { sqlCommandType :: SQLCommandType
-  , table :: String
-  , columns :: [SQLColumn]
-  , clauses :: [(SQLClauseType, [String])]
-  } deriving (Eq)
+type Table = String
+type Columns = [SQLColumn]
+type Clauses = [(SQLClauseType, [String])]
+
+data SQLCommand = Select Table Columns Clauses
+                | Insert Table Columns
+                | Delete Table Clauses
+                | Update Table Columns Clauses
+                deriving (Eq)
 
 instance Show SQLCommand where
-  showsPrec _ (SQLCommand SELECT table columns clauses) =
+  showsPrec _ (Select table columns clauses) =
     showString "SELECT " .
     (showString $ intercalate ", " (showColumnName <$> columns)) .
     showString " FROM " .
@@ -25,7 +28,7 @@ instance Show SQLCommand where
       else (showChar ' ' .
             (showString $ intercalate " " (showClause <$> clauses)) .
             showChar ';')
-  showsPrec _ (SQLCommand INSERT table columnsWithValue _) =
+  showsPrec _ (Insert table columnsWithValue) =
     showString "INSERT INTO " .
     showString table .
     showString " (" .
@@ -34,12 +37,12 @@ instance Show SQLCommand where
     (showString $
      intercalate ", " ((fromMaybe "") . showColumnValue <$> columnsWithValue)) .
     showString ");"
-  showsPrec _ (SQLCommand DELETE table [] clauses) =
+  showsPrec _ (Delete table clauses) =
     showString "DELETE FROM " .
     showString table .
     showChar ' ' .
     (showString $ intercalate " " (showClause <$> clauses)) . showChar ';'
-  showsPrec _ (SQLCommand UPDATE table columns clauses) =
+  showsPrec _ (Update table columns clauses) =
     showString "UPDATE " .
     showString table .
     showString " SET " .
@@ -67,7 +70,7 @@ instance Read SQLCommandType where
 
 data SQLColumn = Column String
                | ColumnWithString String String
-               deriving (Eq, Show)
+               deriving (Eq)
 
 column :: String -> SQLColumn
 column = Column
@@ -123,25 +126,25 @@ parseByType SELECT = do
   string "from " <|> string "FROM "
   (table, last) <- parseWord endWithSpaceOrSemicolon
   clauses <- parseClauses last
-  return $ SQLCommand SELECT table (column <$> columns) clauses
+  return $ Select table (column <$> columns) clauses
 parseByType UPDATE = do
   (table, _) <- parseWord endWithSpace
   string "set " <|> string "SET "
   (columns, last) <- parseCommaSeparatedFields endWithSpaceOrSemicolon
   clauses <- parseClauses last
-  return $ SQLCommand UPDATE table (column <$> columns) clauses
+  return $ Update table (column <$> columns) clauses
 parseByType DELETE = do
   string "from " <|> string "FROM "
   (table, last) <- parseWord endWithSpaceOrSemicolon
   clauses <- parseClauses last
-  return $ SQLCommand DELETE table [] clauses
+  return $ Delete table clauses
 parseByType INSERT = do
   string "into " <|> string "INTO "
   (table, _) <- parseWord $ string " ("
   (cs, _) <-
     parseCommaSeparatedFields (string ") values (" <|> string ") VALUES (")
   (vs, _) <- parseCommaSeparatedFields $ string ");"
-  return $ SQLCommand INSERT table (zipWith columnWithValue cs vs) []
+  return $ Insert table (zipWith columnWithValue cs vs)
 
 parseClause :: ReadP a -> ReadP (Maybe (SQLClauseType, [String], a))
 parseClause trail =
