@@ -1,8 +1,10 @@
 module SQLParSec where
 
 import Data.Char (isSpace, toUpper)
-import Control.Applicative ((<|>))
+import Data.Maybe (fromMaybe, maybeToList, catMaybes)
+import Control.Applicative (empty, (<|>))
 import Text.ParserCombinators.ReadP
+import Text.Read (readMaybe)
 
 data SQLCommand = SQLCommand
   { sqlCommandType :: SQLCommandType
@@ -48,16 +50,32 @@ data SQLClauseType = WHERE
                    | HAVING
                    | GROUPBY
                    | ORDERBY
-                   deriving (Eq, Show)
+                   deriving (Eq)
 
 instance Read SQLClauseType where
   readsPrec _ str =
     case fmap toUpper str of
       "WHERE" -> [(WHERE, "")]
       "HAVING" -> [(HAVING, "")]
-      "GROUPBY" -> [(GROUPBY, "")]
-      "ORDERBY" -> [(ORDERBY, "")]
+      "GROUP BY" -> [(GROUPBY, "")]
+      "ORDER BY" -> [(ORDERBY, "")]
       _ -> []
+
+instance Show SQLClauseType where
+  showsPrec _ WHERE = showString "WHERE"
+  showsPrec _ HAVING = showString "HAVING"
+  showsPrec _ GROUPBY = showString "GROUP BY"
+  showsPrec _ ORDERBY = showString "ORDER BY"
+
+parseSQLClauseType :: ReadP (Maybe SQLClauseType)
+parseSQLClauseType =
+  foldl
+    (\p t -> p <|> string t)
+    empty
+    (sqlClauseTypes ++ ((toUpper <$>) <$> sqlClauseTypes)) >>=
+  return . readMaybe
+
+sqlClauseTypes = ["where", "having", "order by", "group by"]
 
 parseSQLCommand :: ReadP SQLCommand
 parseSQLCommand = fmap (read . fst) (parseWord $ endWithSpace) >>= parseByType
@@ -88,19 +106,21 @@ parseByType INSERT = do
   (vs, _) <- parseCommaSeparatedFields $ string ");"
   return $ SQLCommand INSERT table (zipWith columnWithValue cs vs) []
 
-parseClause :: ReadP a -> ReadP (SQLClauseType, [String], a)
-parseClause trail = do
-  clauseType <- fmap (read . fst)  (parseWord $ endWithSpace)
-  (fields, trailing) <- parseCommaSeparatedFields $ trail
-  return (clauseType, fields, trailing)
+parseClause :: ReadP a -> ReadP (Maybe (SQLClauseType, [String], a))
+parseClause trail =
+  parseSQLClauseType >>=
+  (\m -> satisfy (== ' ') >> (sequence $ (p trail) <$> m))
+  where
+    p trail =
+      (\t -> (\(fs, v) -> (t, fs, v)) <$> (parseCommaSeparatedFields $ trail))
 
 parseClauses :: Char -> ReadP [(SQLClauseType, [String])]
 parseClauses ' ' = do
-  initClauses <- option [] (many1 (parseClause $ endWithSpace))
-  (lastClauseType, lastConditions, _) <- parseClause $ endWithSemicolon
-  return $
-    (fmap (\(t, cs, _) -> (t, cs)) initClauses) ++
-    [(lastClauseType, lastConditions)]
+  initClauses <- catMaybes <$> (many (parseClause $ endWithSpace))
+  last <-
+    (\m -> (\(ct, cs, _) -> (ct, cs)) <$> maybeToList m) <$>
+    (parseClause $ endWithSemicolon)
+  return $ (fmap (\(t, cs, _) -> (t, cs)) initClauses) ++ last
 parseClauses _ = return []
 
 parseWord :: ReadP a -> ReadP (String, a)

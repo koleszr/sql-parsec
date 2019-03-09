@@ -159,7 +159,7 @@ test_parseSQLCommand_select =
        , (ORDERBY, ["name", "age"])
        ])
     parseSQLCommand
-    "SELECT age, name FROM person WHERE age>27, name='Zoltan' HAVING COUNT(*) ORDERBY name, age;"
+    "SELECT age, name FROM person WHERE age>27, name='Zoltan' HAVING COUNT(*) ORDER BY name, age;"
 
 test_parseSQLCommand_update_upper :: Assertion
 test_parseSQLCommand_update_upper =
@@ -220,16 +220,16 @@ test_parseSQLCommand_insert_lower =
 test_parseClause_single :: Assertion
 test_parseClause_single =
   assertParse
-    (WHERE, ["age>27", "name='Zoltan'"], ';')
+    (Just (WHERE, ["age>27"], ';'))
     (parseClause $ satisfy (== ';'))
-    "WHERE age>27, name='Zoltan';"
+    "WHERE age>27;"
 
 test_parseClause_multiple :: Assertion
 test_parseClause_multiple =
   assertParse
-    (WHERE, ["age>27"], ';')
+    (Just (WHERE, ["age>27", "name='Zoltan'"], ';'))
     (parseClause $ satisfy (== ';'))
-    "WHERE age>27;"
+    "WHERE age>27, name='Zoltan';"
 
 test_parseClauses_single :: Assertion
 test_parseClauses_single =
@@ -243,7 +243,7 @@ test_parseClauses_multiple =
     , (ORDERBY, ["name", "age"])
     ]
     (parseClauses ' ')
-    "WHERE age>27, name='Zoltan' HAVING COUNT(*) ORDERBY name, age;"
+    "WHERE age>27, name='Zoltan' HAVING COUNT(*) ORDER BY name, age;"
 
 test_parseClauses_noSpace :: Assertion
 test_parseClauses_noSpace =
