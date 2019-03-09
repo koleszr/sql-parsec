@@ -37,7 +37,7 @@ testGroup_parseSQLCommand_update =
   testGroup
     "parseSQLCommand UPDATE"
     [ testCase
-        "Should parse UPDATE command correclty"
+        "Should parse UPDATE command correctly"
         test_parseSQLCommand_update_upper
     , testCase
         "Should parse update command correctly"
@@ -51,7 +51,7 @@ testGroup_parseSQLCommand_delete =
   testGroup
     "parseSQLCommand DELETE FROM"
     [ testCase
-        "Should parse DELETE command correclty"
+        "Should parse DELETE command correctly"
         test_parseSQLCommand_delete_upper
     , testCase
         "Should parse delete command correctly"
@@ -65,7 +65,7 @@ testGroup_parseSQLCommand_insert =
   testGroup
     "parseSqlcommand INSERT INTO"
     [ testCase
-        "Should parse INSERT command correclty"
+        "Should parse INSERT command correctly"
         test_parseSQLCommand_insert_upper
     , testCase
         "Should parse insert command correctly"
