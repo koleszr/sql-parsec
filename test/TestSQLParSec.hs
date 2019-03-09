@@ -136,14 +136,14 @@ test_parseWord_semicolon =
 test_parseSQLCommand_select_upper :: Assertion
 test_parseSQLCommand_select_upper =
   assertParse
-    (SQLCommand SELECT "person" ["age", "name"] [])
+    (SQLCommand SELECT "person" [column "age", column "name"] [])
     parseSQLCommand
     "SELECT age, name FROM person;"
 
 test_parseSQLCommand_select_lower :: Assertion
 test_parseSQLCommand_select_lower =
   assertParse
-    (SQLCommand SELECT "person" ["age", "name"] [])
+    (SQLCommand SELECT "person" [column "age", column "name"] [])
     parseSQLCommand
     "select age, name from person;"
 
@@ -153,7 +153,7 @@ test_parseSQLCommand_select =
     (SQLCommand
        SELECT
        "person"
-       ["age", "name"]
+       [column "age", column "name"]
        [ (WHERE, ["age>27", "name='Zoltan'"])
        , (HAVING, ["COUNT(*)"])
        , (ORDERBY, ["name", "age"])
@@ -164,21 +164,21 @@ test_parseSQLCommand_select =
 test_parseSQLCommand_update_upper :: Assertion
 test_parseSQLCommand_update_upper =
   assertParse
-    (SQLCommand UPDATE "person" ["age=30"] [])
+    (SQLCommand UPDATE "person" [column "age=30"] [])
     parseSQLCommand
     "UPDATE person SET age=30;"
 
 test_parseSQLCommand_update_lower :: Assertion
 test_parseSQLCommand_update_lower =
   assertParse
-    (SQLCommand UPDATE "person" ["age=30"] [])
+    (SQLCommand UPDATE "person" [column "age=30"] [])
     parseSQLCommand
     "update person set age=30;"
 
 test_parseSQLCommand_update :: Assertion
 test_parseSQLCommand_update =
   assertParse
-    (SQLCommand UPDATE "person" ["age=27"] [(WHERE, ["name='Zoltan'"])])
+    (SQLCommand UPDATE "person" [column "age=27"] [(WHERE, ["name='Zoltan'"])])
     parseSQLCommand
     "UPDATE person SET age=27 WHERE name='Zoltan';"
 
@@ -206,14 +206,14 @@ test_parseSQLCommand_delete =
 test_parseSQLCommand_insert_upper :: Assertion
 test_parseSQLCommand_insert_upper =
   assertParse
-  (SQLCommand INSERT "person" ["name='Zoltan'", "age=27"] [])
+  (SQLCommand INSERT "person" [columnWithValue "name" "'Zoltan'", columnWithValue "age" "27"] [])
   parseSQLCommand
   "INSERT INTO person (name, age) VALUES ('Zoltan', 27);"
 
 test_parseSQLCommand_insert_lower :: Assertion
 test_parseSQLCommand_insert_lower =
   assertParse
-  (SQLCommand INSERT "person" ["name='Zoltan'", "age=27"] [])
+  (SQLCommand INSERT "person" [columnWithValue "name" "'Zoltan'", columnWithValue "age" "27"] [])
   parseSQLCommand
   "insert into person (name, age) values ('Zoltan', 27);"
 

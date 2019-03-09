@@ -7,7 +7,7 @@ import Text.ParserCombinators.ReadP
 data SQLCommand = SQLCommand
   { sqlCommandType :: SQLCommandType
   , table :: String
-  , columns :: [String]
+  , columns :: [SQLColumn]
   , clauses :: [(SQLClauseType, [String])]
   } deriving (Eq, Show)
 
@@ -25,6 +25,24 @@ instance Read SQLCommandType where
       "UPDATE" -> [(UPDATE, "")]
       "DELETE" -> [(DELETE, "")]
       _ -> []
+
+data SQLColumn = Column String
+               | ColumnWithString String String
+               deriving (Eq, Show)
+
+column :: String -> SQLColumn
+column = Column
+
+columnWithValue :: String -> String -> SQLColumn
+columnWithValue = ColumnWithString
+
+showColumnName :: SQLColumn -> String
+showColumnName (Column c) = c
+showColumnName (ColumnWithString c _) = c
+
+showColumnValue :: SQLColumn -> Maybe String
+showColumnValue (ColumnWithString _ v) = Just v
+showColumnValue _ = Nothing
 
 data SQLClauseType = WHERE
                    | HAVING
@@ -50,13 +68,13 @@ parseByType SELECT = do
   string "from " <|> string "FROM "
   (table, last) <- parseWord $ endWithSpaceOrSemicolon
   clauses <- parseClauses last
-  return $ SQLCommand SELECT table columns clauses
+  return $ SQLCommand SELECT table (column <$> columns) clauses
 parseByType UPDATE = do
   (table, _) <- parseWord $ endWithSpace
   string "set " <|> string "SET "
   (columns, last) <- parseCommaSeparatedFields $ endWithSpaceOrSemicolon
   clauses <- parseClauses last
-  return $ SQLCommand UPDATE table columns clauses
+  return $ SQLCommand UPDATE table (column <$> columns) clauses
 parseByType DELETE = do
   string "from " <|> string "FROM "
   (table, last) <- parseWord $ endWithSpaceOrSemicolon
@@ -68,7 +86,7 @@ parseByType INSERT = do
   (cs, _) <- parseCommaSeparatedFields $ string ") "
   string "values (" <|> string "VALUES ("
   (vs, _) <- parseCommaSeparatedFields $ string ");"
-  return $ SQLCommand INSERT table (zipWith (\a b -> a ++ "=" ++ b) cs vs) []
+  return $ SQLCommand INSERT table (zipWith columnWithValue cs vs) []
 
 parseClause :: ReadP a -> ReadP (SQLClauseType, [String], a)
 parseClause trail = do
