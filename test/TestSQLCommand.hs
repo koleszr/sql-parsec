@@ -79,6 +79,9 @@ testGroup_show =
         test_show_select_without_clause
     , testCase "Should show INSERT correctly" test_show_insert
     , testCase "Should show DELETE correctly" test_show_delete
+    , testCase
+        "Should show DELETE without clauses correctly"
+        test_show_delete_without_clause
     , testCase "Should show UPDATE correctly" test_show_update
     , testCase
         "Should show UPDATE without clauses correctly"
@@ -134,36 +137,36 @@ test_parseSQLCommand_select =
 test_parseSQLCommand_update_upper :: Assertion
 test_parseSQLCommand_update_upper =
   assertParse
-    (Update "person" ["age=30"] [])
+    (Update "person" ["age=30"] Nothing)
     parseSQLCommand
     "UPDATE person SET age=30;"
 
 test_parseSQLCommand_update_lower :: Assertion
 test_parseSQLCommand_update_lower =
   assertParse
-    (Update "person" ["age=30"] [])
+    (Update "person" ["age=30"] Nothing)
     parseSQLCommand
     "update person set age=30;"
 
 test_parseSQLCommand_update :: Assertion
 test_parseSQLCommand_update =
   assertParse
-    (Update "person" ["age=27"] [(WHERE, ["name='Zoltan'"])])
+    (Update "person" ["age=27"] (Just (WHERE, ["name='Zoltan'"])))
     parseSQLCommand
     "UPDATE person SET age=27 WHERE name='Zoltan';"
 
 test_parseSQLCommand_delete_upper :: Assertion
 test_parseSQLCommand_delete_upper =
-  assertParse (Delete "person" []) parseSQLCommand "DELETE FROM person;"
+  assertParse (Delete "person" Nothing) parseSQLCommand "DELETE FROM person;"
 
 test_parseSQLCommand_delete_lower :: Assertion
 test_parseSQLCommand_delete_lower =
-  assertParse (Delete "person" []) parseSQLCommand "DELETE FROM person;"
+  assertParse (Delete "person" Nothing) parseSQLCommand "DELETE FROM person;"
 
 test_parseSQLCommand_delete :: Assertion
 test_parseSQLCommand_delete =
   assertParse
-    (Delete "person" [(WHERE, ["name='Zoltan'"])])
+    (Delete "person" (Just (WHERE, ["name='Zoltan'"])))
     parseSQLCommand
     "DELETE FROM person WHERE name='Zoltan';"
 
@@ -196,9 +199,7 @@ test_show_select =
 
 test_show_select_without_clause :: Assertion
 test_show_select_without_clause =
-  assertShow
-    "SELECT * FROM person;"
-    (Select "person" ["*"] [])
+  assertShow "SELECT * FROM person;" (Select "person" ["*"] [])
 
 test_show_insert :: Assertion
 test_show_insert =
@@ -209,41 +210,38 @@ test_show_insert =
 test_show_delete :: Assertion
 test_show_delete =
   assertShow
-    "DELETE FROM person WHERE age>27;"
-    (Delete "person" [(WHERE, ["age>27"])])
+    "DELETE FROM person WHERE age>27, name='Zoltan';"
+    (Delete "person" (Just (WHERE, ["age>27", "name='Zoltan'"])))
+
+test_show_delete_without_clause :: Assertion
+test_show_delete_without_clause =
+  assertShow "DELETE FROM person;" (Delete "person" Nothing)
 
 test_show_update :: Assertion
 test_show_update =
   assertShow
     "UPDATE person SET age=27, name='Zoli' WHERE age=26, name='Zoltan';"
-    (Update "person" ["age=27", "name='Zoli'"] [(WHERE, ["age=26", "name='Zoltan'"])])
+    (Update
+       "person"
+       ["age=27", "name='Zoli'"]
+       (Just (WHERE, ["age=26", "name='Zoltan'"])))
 
 test_show_update_without_clause :: Assertion
 test_show_update_without_clause =
-  assertShow "UPDATE person SET age=30;" (Update "person" ["age=30"] [])
-
-assertShow :: String -> SQLCommand -> Assertion
-assertShow expected cmd = expected @=? show cmd
+  assertShow "UPDATE person SET age=30;" (Update "person" ["age=30"] Nothing)
 
 test_read_SQLCommandType_select :: Assertion
-test_read_SQLCommandType_select =
-  ((Just SELECT) @=? (readMaybe "SELECT")) >>
-  ((Just SELECT) @=? (readMaybe "select"))
+test_read_SQLCommandType_select = assertRead (Just SELECT) "SELECT"
 
-test_read_SQLCommandType_update =
-  ((Just UPDATE) @=? (readMaybe "UPDATE")) >>
-  ((Just UPDATE) @=? (readMaybe "update"))
+test_read_SQLCommandType_update :: Assertion
+test_read_SQLCommandType_update = assertRead (Just UPDATE) "UPDATE"
 
 test_read_SQLCommandType_delete :: Assertion
-test_read_SQLCommandType_delete =
-  ((Just DELETE) @=? (readMaybe "DELETE")) >>
-  ((Just DELETE) @=? (readMaybe "delete"))
+test_read_SQLCommandType_delete = assertRead (Just DELETE) "DELETE"
 
 test_read_SQLCommandType_insert :: Assertion
-test_read_SQLCommandType_insert =
-  ((Just INSERT) @=? (readMaybe "INSERT")) >>
-  ((Just INSERT) @=? (readMaybe "insert"))
+test_read_SQLCommandType_insert = assertRead (Just INSERT) "INSERT"
 
 test_read_SQLCommandType_invalid :: Assertion
 test_read_SQLCommandType_invalid =
-  Nothing @=? ((readMaybe "invalid") :: Maybe SQLCommandType)
+  assertRead (Nothing :: Maybe SQLCommandType) "invalid"

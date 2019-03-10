@@ -1,8 +1,10 @@
 module SQLClause
   ( SQLClauseType (..)
+  , Clause
   , showClause
   , parseClause
   , parseClauses
+  , parseWhereClause
   ) where
 
 import Control.Applicative (empty, (<|>))
@@ -12,6 +14,8 @@ import Data.Maybe (catMaybes, maybeToList)
 import SQLParSecUtils
 import Text.ParserCombinators.ReadP
 import Text.Read (readMaybe)
+
+type Clause = (SQLClauseType, [String])
 
 data SQLClauseType = WHERE
                    | HAVING
@@ -34,7 +38,7 @@ instance Show SQLClauseType where
   showsPrec _ GROUPBY = showString "GROUP BY"
   showsPrec _ ORDERBY = showString "ORDER BY"
 
-showClause :: (SQLClauseType, [String]) -> String
+showClause :: Clause -> String
 showClause (typ, vs) = show typ ++ " " ++ intercalate ", " vs
 
 parseSQLClauseType :: ReadP (Maybe SQLClauseType)
@@ -56,7 +60,7 @@ parseClause trail =
     p trail =
       (\t -> (\(fs, v) -> (t, fs, v)) <$> (parseCommaSeparatedFields trail))
 
-parseClauses :: Char -> ReadP [(SQLClauseType, [String])]
+parseClauses :: Char -> ReadP [Clause]
 parseClauses ' ' = do
   initClauses <- catMaybes <$> (many (parseClause endWithSpace))
   last <-
@@ -64,3 +68,10 @@ parseClauses ' ' = do
     (parseClause endWithSemicolon)
   return $ (fmap (\(t, cs, _) -> (t, cs)) initClauses) ++ last
 parseClauses _ = return []
+
+parseWhereClause :: Char -> ReadP (Maybe Clause)
+parseWhereClause c = parseClauses c >>= extractWhere
+  where
+    extractWhere (w@(WHERE, cs):[]) = return $ Just w
+    extractWhere [] = return $ Nothing
+    extractWhere _ = pfail

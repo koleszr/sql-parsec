@@ -13,14 +13,13 @@ import SQLParSecUtils
 import Text.ParserCombinators.ReadP
 
 type Table = String
-type Clauses = [(SQLClauseType, [String])]
 type Columns = [String]
 type Values = [String]
 
-data SQLCommand = Select Table Columns Clauses
+data SQLCommand = Select Table Columns [Clause]
                 | Insert Table Columns Values
-                | Delete Table Clauses
-                | Update Table Columns Clauses
+                | Delete Table (Maybe Clause)
+                | Update Table Columns (Maybe Clause)
                 deriving (Eq)
 
 instance Show SQLCommand where
@@ -41,21 +40,22 @@ instance Show SQLCommand where
     (showString $ intercalate ", " columns) .
     showString ") VALUES (" .
     (showString $ intercalate ", " values) . showString ");"
-  showsPrec _ (Delete table clauses) =
+  showsPrec _ (Delete table clause) =
     showString "DELETE FROM " .
     showString table .
-    showChar ' ' .
-    (showString $ intercalate " " (showClause <$> clauses)) . showChar ';'
-  showsPrec _ (Update table columns clauses) =
+    (fromMaybe
+       (showChar ';')
+       ((\c -> showChar ' ' . (showString $ showClause c) . showChar ';') <$>
+        clause))
+  showsPrec _ (Update table columns clause) =
     showString "UPDATE " .
     showString table .
     showString " SET " .
     (showString $ intercalate ", " columns) .
-    if null clauses
-      then showChar ';'
-      else (showChar ' ' .
-            (showString $ intercalate " " (showClause <$> clauses)) .
-            showChar ';')
+    (fromMaybe
+       (showChar ';')
+       ((\c -> showChar ' ' . (showString $ showClause c) . showChar ';') <$>
+        clause))
 
 data SQLCommandType = SELECT
                     | INSERT
@@ -86,13 +86,13 @@ parseByType UPDATE = do
   (table, _) <- parseWord endWithSpace
   string "set " <|> string "SET "
   (columns, last) <- parseCommaSeparatedFields endWithSpaceOrSemicolon
-  clauses <- parseClauses last
-  return $ Update table columns clauses
+  clause <- parseWhereClause last
+  return $ Update table columns clause
 parseByType DELETE = do
   string "from " <|> string "FROM "
   (table, last) <- parseWord endWithSpaceOrSemicolon
-  clauses <- parseClauses last
-  return $ Delete table clauses
+  clause <- parseWhereClause last
+  return $ Delete table clause
 parseByType INSERT = do
   string "into " <|> string "INTO "
   (table, _) <- parseWord $ string " ("
