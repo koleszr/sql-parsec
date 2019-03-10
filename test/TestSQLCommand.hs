@@ -1,7 +1,6 @@
 module TestSQLCommand (tests) where
 
 import SQLClause
-import SQLColumn
 import SQLCommand
 import Test.Framework
 import Test.Framework.Providers.HUnit
@@ -107,14 +106,14 @@ testGroup_read_SQLCommandType =
 test_parseSQLCommand_select_upper :: Assertion
 test_parseSQLCommand_select_upper =
   assertParse
-    (Select "person" [column "age", column "name"] [])
+    (Select "person" ["age", "name"] [])
     parseSQLCommand
     "SELECT age, name FROM person;"
 
 test_parseSQLCommand_select_lower :: Assertion
 test_parseSQLCommand_select_lower =
   assertParse
-    (Select "person" [column "age", column "name"] [])
+    (Select "person" ["age", "name"] [])
     parseSQLCommand
     "select age, name from person;"
 
@@ -123,7 +122,7 @@ test_parseSQLCommand_select =
   assertParse
     (Select
        "person"
-       [column "age", column "name"]
+       ["age", "name"]
        [ (WHERE, ["age>27", "name='Zoltan'"])
        , (HAVING, ["COUNT(*)"])
        , (GROUPBY, ["employer"])
@@ -135,21 +134,21 @@ test_parseSQLCommand_select =
 test_parseSQLCommand_update_upper :: Assertion
 test_parseSQLCommand_update_upper =
   assertParse
-    (Update "person" [column "age=30"] [])
+    (Update "person" ["age=30"] [])
     parseSQLCommand
     "UPDATE person SET age=30;"
 
 test_parseSQLCommand_update_lower :: Assertion
 test_parseSQLCommand_update_lower =
   assertParse
-    (Update "person" [column "age=30"] [])
+    (Update "person" ["age=30"] [])
     parseSQLCommand
     "update person set age=30;"
 
 test_parseSQLCommand_update :: Assertion
 test_parseSQLCommand_update =
   assertParse
-    (Update "person" [column "age=27"] [(WHERE, ["name='Zoltan'"])])
+    (Update "person" ["age=27"] [(WHERE, ["name='Zoltan'"])])
     parseSQLCommand
     "UPDATE person SET age=27 WHERE name='Zoltan';"
 
@@ -171,18 +170,14 @@ test_parseSQLCommand_delete =
 test_parseSQLCommand_insert_upper :: Assertion
 test_parseSQLCommand_insert_upper =
   assertParse
-    (Insert
-       "person"
-       [columnWithValue "name" "'Zoltan'", columnWithValue "age" "27"])
+    (Insert "person" ["name", "age"] ["'Zoltan'", "27"])
     parseSQLCommand
     "INSERT INTO person (name, age) VALUES ('Zoltan', 27);"
 
 test_parseSQLCommand_insert_lower :: Assertion
 test_parseSQLCommand_insert_lower =
   assertParse
-    (Insert
-       "person"
-       [columnWithValue "name" "'Zoltan'", columnWithValue "age" "27"])
+    (Insert "person" ["name", "age"] ["'Zoltan'", "27"])
     parseSQLCommand
     "insert into person (name, age) values ('Zoltan', 27);"
 
@@ -192,7 +187,7 @@ test_show_select =
     "SELECT name, age, COUNT(id) FROM person WHERE age>27 GROUP BY employer HAVING COUNT(id) ORDER BY COUNT(id);"
     (Select
        "person"
-       [column "name", column "age", column "COUNT(id)"]
+       ["name", "age", "COUNT(id)"]
        [ (WHERE, ["age>27"])
        , (GROUPBY, ["employer"])
        , (HAVING, ["COUNT(id)"])
@@ -202,19 +197,14 @@ test_show_select =
 test_show_select_without_clause :: Assertion
 test_show_select_without_clause =
   assertShow
-    "SELECT name, age FROM person;"
-    (Select "person" [column "name", column "age"] [])
+    "SELECT * FROM person;"
+    (Select "person" ["*"] [])
 
 test_show_insert :: Assertion
 test_show_insert =
   assertShow
     "INSERT INTO person (name, age, employer) VALUES ('Zoltan', 27, 'E Corp');"
-    (Insert
-       "person"
-       [ columnWithValue "name" "'Zoltan'"
-       , columnWithValue "age" "27"
-       , columnWithValue "employer" "'E Corp'"
-       ])
+    (Insert "person" ["name", "age", "employer"] ["'Zoltan'", "27", "'E Corp'"])
 
 test_show_delete :: Assertion
 test_show_delete =
@@ -225,12 +215,12 @@ test_show_delete =
 test_show_update :: Assertion
 test_show_update =
   assertShow
-    "UPDATE person SET age=27 WHERE age=26;"
-    (Update "person" [column "age=27"] [(WHERE, ["age=26"])])
+    "UPDATE person SET age=27, name='Zoli' WHERE age=26, name='Zoltan';"
+    (Update "person" ["age=27", "name='Zoli'"] [(WHERE, ["age=26", "name='Zoltan'"])])
 
 test_show_update_without_clause :: Assertion
 test_show_update_without_clause =
-  assertShow "UPDATE person SET age=30;" (Update "person" [column "age=30"] [])
+  assertShow "UPDATE person SET age=30;" (Update "person" ["age=30"] [])
 
 assertShow :: String -> SQLCommand -> Assertion
 assertShow expected cmd = expected @=? show cmd
