@@ -1,25 +1,27 @@
 module SQLCommand
-  ( SQLCommand(..)
-  , SQLCommandType(..)
+  ( SQLCommand (..)
+  , SQLCommandType
   , parseSQLCommand
   ) where
 
 import Control.Applicative ((<|>))
 import Data.Char (isSpace, toUpper)
+import Data.Either (fromRight)
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import SQLClause
 import SQLParSecUtils
 import Text.ParserCombinators.ReadP
+import Text.Read (readMaybe)
 
 type Table = String
 type Columns = [String]
 type Values = [String]
 
-data SQLCommand = Select Table Columns [Clause]
+data SQLCommand = Select Table Columns [SQLClause]
                 | Insert Table Columns Values
-                | Delete Table (Maybe Clause)
-                | Update Table Columns (Maybe Clause)
+                | Delete Table (Maybe SQLClause)
+                | Update Table Columns (Maybe SQLClause)
                 deriving (Eq)
 
 instance Show SQLCommand where
@@ -31,8 +33,7 @@ instance Show SQLCommand where
     if null clauses
       then showChar ';'
       else (showChar ' ' .
-            (showString $ intercalate " " (showClause <$> clauses)) .
-            showChar ';')
+            (showString $ intercalate " " (show <$> clauses)) . showChar ';')
   showsPrec _ (Insert table columns values) =
     showString "INSERT INTO " .
     showString table .
@@ -45,7 +46,7 @@ instance Show SQLCommand where
     showString table .
     (fromMaybe
        (showChar ';')
-       ((\c -> showChar ' ' . (showString $ showClause c) . showChar ';') <$>
+       ((\c -> showChar ' ' . (showString $ show c) . showChar ';') <$>
         clause))
   showsPrec _ (Update table columns clause) =
     showString "UPDATE " .
@@ -54,7 +55,7 @@ instance Show SQLCommand where
     (showString $ intercalate ", " columns) .
     (fromMaybe
        (showChar ';')
-       ((\c -> showChar ' ' . (showString $ showClause c) . showChar ';') <$>
+       ((\c -> showChar ' ' . (showString $ show c) . showChar ';') <$>
         clause))
 
 data SQLCommandType = SELECT
@@ -72,31 +73,42 @@ instance Read SQLCommandType where
       "DELETE" -> [(DELETE, "")]
       _ -> []           
 
-parseSQLCommand :: ReadP SQLCommand
-parseSQLCommand = fmap (read . fst) (parseWord endWithSpace) >>= parseByType
+parseSQLCommand :: ReadP (Maybe SQLCommand)
+parseSQLCommand = fmap (readMaybe . fst) (parseWord endWithSpace) >>= parseByType
 
-parseByType :: SQLCommandType -> ReadP SQLCommand
-parseByType SELECT = do
-  (columns, _) <- parseCommaSeparatedFields $ satisfy isSpace
-  string "from " <|> string "FROM "
-  (table, last) <- parseWord endWithSpaceOrSemicolon
-  clauses <- parseClauses last
-  return $ Select table columns clauses
-parseByType UPDATE = do
-  (table, _) <- parseWord endWithSpace
-  string "set " <|> string "SET "
-  (columns, last) <- parseCommaSeparatedFields endWithSpaceOrSemicolon
-  clause <- parseWhereClause last
-  return $ Update table columns clause
-parseByType DELETE = do
-  string "from " <|> string "FROM "
-  (table, last) <- parseWord endWithSpaceOrSemicolon
-  clause <- parseWhereClause last
-  return $ Delete table clause
-parseByType INSERT = do
-  string "into " <|> string "INTO "
-  (table, _) <- parseWord $ string " ("
-  (cs, _) <-
-    parseCommaSeparatedFields (string ") values (" <|> string ") VALUES (")
-  (values, _) <- parseCommaSeparatedFields $ string ");"
-  return $ Insert table cs values
+parseByType :: Maybe SQLCommandType -> ReadP (Maybe SQLCommand)
+parseByType t = sequence $ fmap p t
+  where
+    p SELECT = do
+      (columns, _) <- parseCommaSeparatedFields $ satisfy isSpace
+      string "FROM " <++ string "from "
+      (table, last) <- parseWord endWithSpaceOrSemicolon
+      clauses <- if last == ';' then return [] else parseSQLClauses
+      return $ Select table columns clauses
+    p UPDATE = do
+      (table, _) <- parseWord endWithSpace
+      string "SET " <++ string "set "
+      (columns, last) <- parseCommaSeparatedFields endWithSpaceOrSemicolon
+      clause <-
+        if isSpace last
+        then parseWhereClause
+        else return . Right $  Nothing
+      fromEither clause (\c -> return $ Update table columns c)
+    p DELETE = do
+      string "FROM " <++ string "from "
+      (table, last) <- parseWord endWithSpaceOrSemicolon
+      clause <-
+        if isSpace last
+        then parseWhereClause
+        else return . Right $ Nothing
+      fromEither clause (\c -> return $ Delete table c)
+    p INSERT = do
+      string "INTO " <++ string "into "
+      (table, _) <- parseWord $ string " ("
+      (cs, _) <-
+        parseCommaSeparatedFields (string ") VALUES (" <++ string ") values (")
+      (values, _) <- parseCommaSeparatedFields $ string ");"
+      return $ Insert table cs values
+
+fromEither :: Either e a -> (a -> ReadP SQLCommand) -> ReadP SQLCommand
+fromEither e r = fromRight pfail (r <$> e)

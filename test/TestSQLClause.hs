@@ -1,6 +1,9 @@
 module TestSQLClause (tests) where
 
 import SQLClause
+import SQLCondition
+import SQLConditionCombinator
+import SQLParSecUtils (SQLValue (..))
 import Test.Framework (testGroup)
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -8,35 +11,97 @@ import TestUtils
 import Text.ParserCombinators.ReadP
 
 tests =
-  [ testGroup_parseClause
-  , testGroup_parseClauses
+  [ testGroup_parseSQLClauses
+  , testGroup_parseSQLClauses_ORDER_BY
   , testGroup_parseWhereClause
-  , testGroup_read_SQLClauseType
-  , testCase "Should show clause correctly" test_showClause
+  , testCase "Should show clause" test_show
   ]
 
-testGroup_parseClause =
+testGroup_parseSQLClauses =
   testGroup
-    "parseClause"
-    [ testCase "Should parse WHERE clause correctly" test_parseClause_single
-    , testCase
-        "Should parse WHERE clause with multiple conditions correctly"
-        test_parseClause_multiple
+    "parseSQLClauses"
+    [ testCase "Should parse single SQL clause" test_parseSQLClauses_single
+    , testCase "Should parse multiple SQL clauses" test_parseSQLClauses_multiple
     ]
 
-testGroup_parseClauses =
-  testGroup
-    "parseClauses"
-    [ testCase
-        "Should parse a single SQL clause correctly"
-        test_parseClauses_single
-    , testCase
-        "Should parse multiple SQL clauses correcty"
-        test_parseClauses_multiple
-    , testCase
-        "Should return an empty list if the input argument is not a space"
-        test_parseClauses_noSpace
+test_parseSQLClauses_single :: Assertion
+test_parseSQLClauses_single =
+  assertParse
+    [Where (Pure $ SQLCondition E "age" (NumberValue "27"))]
+    parseSQLClauses
+    "WHERE age = 27;"
+
+test_parseSQLClauses_multiple :: Assertion
+test_parseSQLClauses_multiple =
+  assertParse
+    [ Where
+        (Bin
+           OR
+           (Pure $ SQLCondition GRT "age" (NumberValue "27"))
+           (Pure $ SQLCondition E "name" (TextValue "Zoltan Koleszar")))
+    , GroupBy ["age"]
+    , Having (Pure $ SQLCondition GRT "COUNT(age)" (NumberValue "25"))
     ]
+    parseSQLClauses
+    "WHERE age>27 OR name='Zoltan Koleszar' GROUP BY age HAVING COUNT(age) > 25;"
+
+testGroup_parseSQLClauses_ORDER_BY =
+  testGroup
+    "ORDER BY with parseSQLClauses"
+    [ testCase
+        "Should parse single column without specifing order"
+        test_ORDER_BY_single
+    , testCase
+        "Should parse multiple columns without specifing order"
+        test_ORDER_BY_multiple
+    , testCase
+        "Should parse single column in ascending order"
+        test_ORDER_BY_single_ASC
+    , testCase
+        "Should parse multiple columns in descending order"
+        test_ORDER_BY_multiple_DESC
+    , testCase "Should parse columns in ASC and DESC" test_ORDER_BY_mixed
+    ]
+
+test_ORDER_BY_single :: Assertion
+test_ORDER_BY_single =
+  assertParse
+    [OrderBy [SQLOrdering ["name"] ASC]]
+    parseSQLClauses
+    "ORDER BY name;"
+
+test_ORDER_BY_multiple :: Assertion
+test_ORDER_BY_multiple =
+  assertParse
+    [OrderBy [SQLOrdering ["name", "age"] ASC]]
+    parseSQLClauses
+    "ORDER BY name, age;"
+
+test_ORDER_BY_single_ASC :: Assertion
+test_ORDER_BY_single_ASC =
+  assertParse
+    [OrderBy [SQLOrdering ["name"] ASC]]
+    parseSQLClauses
+    "ORDER BY name ASC;"
+
+test_ORDER_BY_multiple_DESC :: Assertion
+test_ORDER_BY_multiple_DESC =
+  assertParse
+    [OrderBy [SQLOrdering ["name", "age"] DESC]]
+    parseSQLClauses
+    "ORDER BY name, age DESC;"
+
+test_ORDER_BY_mixed :: Assertion
+test_ORDER_BY_mixed =
+  assertParse
+    [ OrderBy
+        [ SQLOrdering ["name"] ASC
+        , SQLOrdering ["age", "salary"] DESC
+        ]
+    ]
+    parseSQLClauses
+    "ORDER BY name ASC, age, salary DESC;"
+
 
 testGroup_parseWhereClause =
   testGroup
@@ -45,87 +110,55 @@ testGroup_parseWhereClause =
         "Should return WHERE clause if it was the only one provided"
         test_parseWhereClause
     , testCase
-        "Should return Nothing if no clauses were provided"
-        test_parseWhereClause_no_clause
-    , testCase
         "Should fail if multiple clauses were provided"
         test_parseWhereClause_fail
     ]
 
-testGroup_read_SQLClauseType =
-  testGroup
-    "read SQLClauseType"
-    [ testCase "Should read \"WHERE\" or \"where\" as WHERE" test_read_WHERE
-    , testCase "Should read \"HAVING\" or \"having\" as HAVING" test_read_HAVING
-    , testCase
-        "Should read \"GROUP BY\" or \"group by\" as GROUPBY"
-        test_read_GROUPBY
-    , testCase
-        "Should read \"ORDER BY\" or \"order by\" as ORDERBY"
-        test_read_ORDERBY
-    , testCase "Should fail on invalid input" test_read_invalid
-    ]
-
-test_parseClause_single :: Assertion
-test_parseClause_single =
-  assertParse
-    (Just (WHERE, ["age>27"], ';'))
-    (parseClause $ satisfy (== ';'))
-    "WHERE age>27;"
-
-test_parseClause_multiple :: Assertion
-test_parseClause_multiple =
-  assertParse
-    (Just (WHERE, ["age>27", "name='Zoltan'"], ';'))
-    (parseClause $ satisfy (== ';'))
-    "WHERE age>27, name='Zoltan';"
-
-test_parseClauses_single :: Assertion
-test_parseClauses_single =
-  assertParse [(WHERE, ["age>27"])] (parseClauses ' ') "WHERE age>27;"
-
-test_parseClauses_multiple :: Assertion
-test_parseClauses_multiple =
-  assertParse
-    [ (WHERE, ["age>27", "name='Zoltan'"])
-    , (HAVING, ["COUNT(*)"])
-    , (ORDERBY, ["name", "age"])
-    ]
-    (parseClauses ' ')
-    "WHERE age>27, name='Zoltan' HAVING COUNT(*) ORDER BY name, age;"
-
-test_parseClauses_noSpace :: Assertion
-test_parseClauses_noSpace = assertParse [] (parseClauses ';') "WHERE age>27;"
-
 test_parseWhereClause :: Assertion
 test_parseWhereClause =
   assertParse
-    (Just (WHERE, ["age>27", "name='Zoltan'"]))
-    (parseWhereClause ' ')
-    "WHERE age>27, name='Zoltan';"
-
-test_parseWhereClause_no_clause :: Assertion
-test_parseWhereClause_no_clause =
-  assertParse (Nothing) (parseWhereClause ';') ""
+    (Right
+       (Just
+          (Where $
+           Bin
+             OR
+             (Pure $ SQLCondition GRT "age" (NumberValue "27"))
+             (Pure $ SQLCondition E "name" (TextValue "Zoltan")))))
+    parseWhereClause
+    "WHERE age>27 OR name='Zoltan' ORDER BY name;"
 
 test_parseWhereClause_fail :: Assertion
 test_parseWhereClause_fail =
-  [] @=? (readP_to_S (parseWhereClause ' ') "WHERE age>27, name='Zoltan' ORDER BY name;")
+  [(Left "Found more than one element!", "")] @=?
+  (readP_to_S
+     parseWhereClause
+     "WHERE age>27 AND name='Zoltan' WHERE language = 'Haskell';")
 
-test_read_WHERE :: Assertion
-test_read_WHERE = assertRead (Just WHERE) "WHERE"
+test_parseSQLClause_single :: Assertion
+test_parseSQLClause_single =
+  assertParse
+    [Where (Pure $ SQLCondition GRT "age" (NumberValue "27"))]
+    parseSQLClauses
+    "WHERE age>27;"
 
-test_read_HAVING :: Assertion
-test_read_HAVING = assertRead (Just HAVING) "HAVING"
+test_parseSQLClause_multiple :: Assertion
+test_parseSQLClause_multiple =
+  assertParse
+    [ Where
+        (Bin
+           AND
+           (Pure $ SQLCondition GRT "age" (NumberValue "27"))
+           (Pure $ SQLCondition E "name" (TextValue "Zoltan")))
+    ]
+    parseSQLClauses
+    "WHERE age>27 AND name='Zoltan';"
 
-test_read_GROUPBY :: Assertion
-test_read_GROUPBY = assertRead (Just GROUPBY) "GROUP BY"
-
-test_read_ORDERBY :: Assertion
-test_read_ORDERBY = assertRead (Just ORDERBY) "ORDER BY"
-
-test_read_invalid :: Assertion
-test_read_invalid = assertRead (Nothing :: Maybe SQLClauseType) "INVALID"
-
-test_showClause :: Assertion
-test_showClause = "WHERE name='Zoltan', age>27" @=? showClause (WHERE, ["name='Zoltan'", "age>27"])
+test_show :: Assertion
+test_show =
+  "WHERE name = 'Zoltan' OR age > 27" @=?
+  show
+    (Where
+       (Bin
+          OR
+          (Pure $ SQLCondition E "name" (TextValue "Zoltan"))
+          (Pure $ SQLCondition GRT "age" (NumberValue "27"))))

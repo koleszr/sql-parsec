@@ -2,32 +2,36 @@ module TestSQLCommand (tests) where
 
 import SQLClause
 import SQLCommand
+import SQLCondition
+import SQLConditionCombinator
+import SQLParSecUtils (SQLValue (..))
 import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit
 import TestUtils
 import Text.Read (readMaybe)
+import Text.ParserCombinators.ReadP
 
 tests =
   [ testGroup_parseSQLCommand_select
   , testGroup_parseSQLCommand_update
   , testGroup_parseSQLCommand_delete
   , testGroup_parseSQLCommand_insert
+  , testGroup_parseSQLCommand_fail
   , testGroup_show
-  , testGroup_read_SQLCommandType
   ]
 
 testGroup_parseSQLCommand_select =
   testGroup
     "parseSQLCommand SELECT"
     [ testCase
-        "Should parse SELECT command correctly"
+        "Should parse SELECT command"
         test_parseSQLCommand_select_upper
     , testCase
-        "Should parse select command correctly"
+        "Should parse select command"
         test_parseSQLCommand_select_lower
     , testCase
-        "Should parse SELECT command with multiple clauses correctly"
+        "Should parse SELECT command with multiple clauses"
         test_parseSQLCommand_select
     ]
 
@@ -35,13 +39,13 @@ testGroup_parseSQLCommand_update =
   testGroup
     "parseSQLCommand UPDATE"
     [ testCase
-        "Should parse UPDATE command correctly"
+        "Should parse UPDATE command"
         test_parseSQLCommand_update_upper
     , testCase
-        "Should parse update command correctly"
+        "Should parse update command"
         test_parseSQLCommand_update_lower
     , testCase
-        "Should parse UPDATE command with multiple clauses correctly"
+        "Should parse UPDATE command with multiple clauses"
         test_parseSQLCommand_update
     ]
 
@@ -49,13 +53,13 @@ testGroup_parseSQLCommand_delete =
   testGroup
     "parseSQLCommand DELETE FROM"
     [ testCase
-        "Should parse DELETE command correctly"
+        "Should parse DELETE command"
         test_parseSQLCommand_delete_upper
     , testCase
-        "Should parse delete command correctly"
+        "Should parse delete command"
         test_parseSQLCommand_delete_lower
     , testCase
-        "Should parse DELETE command with where clause correctly"
+        "Should parse DELETE command with where clause"
         test_parseSQLCommand_delete
     ]
 
@@ -63,138 +67,137 @@ testGroup_parseSQLCommand_insert =
   testGroup
     "parseSqlcommand INSERT INTO"
     [ testCase
-        "Should parse INSERT command correctly"
+        "Should parse INSERT command"
         test_parseSQLCommand_insert_upper
     , testCase
-        "Should parse insert command correctly"
+        "Should parse insert command"
         test_parseSQLCommand_insert_lower
     ]
+
+testGroup_parseSQLCommand_fail =
+  testGroup
+  "parseSQLCommand INVALID"
+  [testCase "Should fail if invalid command was given" test_parseSQLCommand_fail_on_invalid]
+
+test_parseSQLCommand_fail_on_invalid :: Assertion
+test_parseSQLCommand_fail_on_invalid =
+  [(Nothing, "")] @=? (readP_to_S parseSQLCommand "INVALID ")
+  
 
 testGroup_show =
   testGroup
     "show"
-    [ testCase "Should show SELECT correctly" test_show_select
+    [ testCase "Should show SELECT" test_show_select
     , testCase
-        "Should show SELECT without clauses correcty"
+        "Should show SELECT without clauses"
         test_show_select_without_clause
-    , testCase "Should show INSERT correctly" test_show_insert
-    , testCase "Should show DELETE correctly" test_show_delete
+    , testCase "Should show INSERT" test_show_insert
+    , testCase "Should show DELETE" test_show_delete
     , testCase
-        "Should show DELETE without clauses correctly"
+        "Should show DELETE without clauses"
         test_show_delete_without_clause
-    , testCase "Should show UPDATE correctly" test_show_update
+    , testCase "Should show UPDATE" test_show_update
     , testCase
-        "Should show UPDATE without clauses correctly"
+        "Should show UPDATE without clauses"
         test_show_update_without_clause
     ]
-
-testGroup_read_SQLCommandType =
-  testGroup
-    "read SQLCommandType"
-    [ testCase
-        "Should read \"SELECT\" or \"select\" as SELECT"
-        test_read_SQLCommandType_select
-    , testCase
-        "Should read \"UPDATE\" or \"update\" as UPDATE"
-        test_read_SQLCommandType_update
-    , testCase
-        "Should read \"DELETE\" or \"delete\" as DELETE"
-        test_read_SQLCommandType_delete
-    , testCase
-        "Should read \"INSERT\" or \"insert\" as INSERT"
-        test_read_SQLCommandType_insert
-    , testCase "Should fail on invalid input" test_read_SQLCommandType_invalid
-    ]    
 
 test_parseSQLCommand_select_upper :: Assertion
 test_parseSQLCommand_select_upper =
   assertParse
-    (Select "person" ["age", "name"] [])
+    (Just $ Select "person" ["age", "name"] [])
     parseSQLCommand
     "SELECT age, name FROM person;"
 
 test_parseSQLCommand_select_lower :: Assertion
 test_parseSQLCommand_select_lower =
   assertParse
-    (Select "person" ["age", "name"] [])
+    (Just $ Select "person" ["age", "name"] [])
     parseSQLCommand
     "select age, name from person;"
 
 test_parseSQLCommand_select :: Assertion
 test_parseSQLCommand_select =
   assertParse
-    (Select
+    (Just $ Select
        "person"
-       ["age", "name"]
-       [ (WHERE, ["age>27", "name='Zoltan'"])
-       , (HAVING, ["COUNT(*)"])
-       , (GROUPBY, ["employer"])
-       , (ORDERBY, ["name", "age"])
+       ["age", "name", "COUNT(age)"]
+       [ Where
+           (Bin
+              AND
+              (Pure $ SQLCondition GRT "age" (NumberValue "27"))
+              (Pure $ SQLCondition E "name" (TextValue "Zoltan")))
+       , GroupBy ["age", "name"]
+       , Having (Pure $ SQLCondition GTE "COUNT(age)" (NumberValue "10"))
+       , OrderBy [SQLOrdering ["age"] DESC, SQLOrdering ["name"] ASC]
        ])
     parseSQLCommand
-    "SELECT age, name FROM person WHERE age>27, name='Zoltan' HAVING COUNT(*) GROUP BY employer ORDER BY name, age;"
+    "SELECT age, name, COUNT(age) FROM person WHERE age>27 AND name='Zoltan' GROUP BY age, name HAVING COUNT(age) >= 10 ORDER BY age DESC, name ASC;"
 
 test_parseSQLCommand_update_upper :: Assertion
 test_parseSQLCommand_update_upper =
   assertParse
-    (Update "person" ["age=30"] Nothing)
+    (Just $ Update "person" ["age=30"] Nothing)
     parseSQLCommand
     "UPDATE person SET age=30;"
 
 test_parseSQLCommand_update_lower :: Assertion
 test_parseSQLCommand_update_lower =
   assertParse
-    (Update "person" ["age=30"] Nothing)
+    (Just $ Update "person" ["age=30"] Nothing)
     parseSQLCommand
     "update person set age=30;"
 
 test_parseSQLCommand_update :: Assertion
 test_parseSQLCommand_update =
   assertParse
-    (Update "person" ["age=27"] (Just (WHERE, ["name='Zoltan'"])))
+    (Just $ Update
+       "person"
+       ["age=27"]
+       (Just (Where (Pure $ SQLCondition E "name" (TextValue "Zoltan")))))
     parseSQLCommand
     "UPDATE person SET age=27 WHERE name='Zoltan';"
 
 test_parseSQLCommand_delete_upper :: Assertion
 test_parseSQLCommand_delete_upper =
-  assertParse (Delete "person" Nothing) parseSQLCommand "DELETE FROM person;"
+  assertParse (Just $ Delete "person" Nothing) parseSQLCommand "DELETE FROM person;"
 
 test_parseSQLCommand_delete_lower :: Assertion
 test_parseSQLCommand_delete_lower =
-  assertParse (Delete "person" Nothing) parseSQLCommand "DELETE FROM person;"
+  assertParse (Just $ Delete "person" Nothing) parseSQLCommand "delete from person;"
 
 test_parseSQLCommand_delete :: Assertion
 test_parseSQLCommand_delete =
   assertParse
-    (Delete "person" (Just (WHERE, ["name='Zoltan'"])))
+    (Just $ Delete "person" (Just (Where (Pure $ SQLCondition E "name" (TextValue "Zoltan")))))
     parseSQLCommand
     "DELETE FROM person WHERE name='Zoltan';"
 
 test_parseSQLCommand_insert_upper :: Assertion
 test_parseSQLCommand_insert_upper =
   assertParse
-    (Insert "person" ["name", "age"] ["'Zoltan'", "27"])
+    (Just $ Insert "person" ["name", "age"] ["'Zoltan'", "27"])
     parseSQLCommand
     "INSERT INTO person (name, age) VALUES ('Zoltan', 27);"
 
 test_parseSQLCommand_insert_lower :: Assertion
 test_parseSQLCommand_insert_lower =
   assertParse
-    (Insert "person" ["name", "age"] ["'Zoltan'", "27"])
+    (Just $ Insert "person" ["name", "age"] ["'Zoltan'", "27"])
     parseSQLCommand
     "insert into person (name, age) values ('Zoltan', 27);"
 
 test_show_select :: Assertion
 test_show_select =
   assertShow
-    "SELECT name, age, COUNT(id) FROM person WHERE age>27 GROUP BY employer HAVING COUNT(id) ORDER BY COUNT(id);"
+    "SELECT employer, name, COUNT(employer) FROM person WHERE age > 27 GROUP BY employer, name HAVING COUNT(employer) < 500 ORDER BY employer, COUNT(employer) ASC, name DESC;"
     (Select
        "person"
-       ["name", "age", "COUNT(id)"]
-       [ (WHERE, ["age>27"])
-       , (GROUPBY, ["employer"])
-       , (HAVING, ["COUNT(id)"])
-       , (ORDERBY, ["COUNT(id)"])
+       ["employer", "name", "COUNT(employer)"]
+       [ Where (Pure $ SQLCondition GRT "age" (NumberValue "27"))
+       , GroupBy ["employer", "name"]
+       , Having (Pure $ SQLCondition LET "COUNT(employer)" (NumberValue "500"))
+       , OrderBy [SQLOrdering ["employer", "COUNT(employer)"] ASC, SQLOrdering ["name"] DESC]
        ])
 
 test_show_select_without_clause :: Assertion
@@ -210,8 +213,15 @@ test_show_insert =
 test_show_delete :: Assertion
 test_show_delete =
   assertShow
-    "DELETE FROM person WHERE age>27, name='Zoltan';"
-    (Delete "person" (Just (WHERE, ["age>27", "name='Zoltan'"])))
+    "DELETE FROM person WHERE age > 27 AND name = 'Zoltan';"
+    (Delete
+       "person"
+       (Just
+          (Where
+             (Bin
+                AND
+                (Pure $ SQLCondition GRT "age" (NumberValue "27"))
+                (Pure $ SQLCondition E "name" (TextValue "Zoltan"))))))
 
 test_show_delete_without_clause :: Assertion
 test_show_delete_without_clause =
@@ -220,28 +230,17 @@ test_show_delete_without_clause =
 test_show_update :: Assertion
 test_show_update =
   assertShow
-    "UPDATE person SET age=27, name='Zoli' WHERE age=26, name='Zoltan';"
+    "UPDATE person SET age=27, name='Zoli' WHERE age = 26 AND name = 'Zoltan';"
     (Update
        "person"
        ["age=27", "name='Zoli'"]
-       (Just (WHERE, ["age=26", "name='Zoltan'"])))
+       (Just
+          (Where
+             (Bin
+                AND
+                (Pure $ SQLCondition E "age" (NumberValue "26"))
+                (Pure $ SQLCondition E "name" (TextValue "Zoltan"))))))
 
 test_show_update_without_clause :: Assertion
 test_show_update_without_clause =
   assertShow "UPDATE person SET age=30;" (Update "person" ["age=30"] Nothing)
-
-test_read_SQLCommandType_select :: Assertion
-test_read_SQLCommandType_select = assertRead (Just SELECT) "SELECT"
-
-test_read_SQLCommandType_update :: Assertion
-test_read_SQLCommandType_update = assertRead (Just UPDATE) "UPDATE"
-
-test_read_SQLCommandType_delete :: Assertion
-test_read_SQLCommandType_delete = assertRead (Just DELETE) "DELETE"
-
-test_read_SQLCommandType_insert :: Assertion
-test_read_SQLCommandType_insert = assertRead (Just INSERT) "INSERT"
-
-test_read_SQLCommandType_invalid :: Assertion
-test_read_SQLCommandType_invalid =
-  assertRead (Nothing :: Maybe SQLCommandType) "invalid"
